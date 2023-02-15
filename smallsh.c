@@ -5,9 +5,11 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <stddef.h>
 #include <sys/types.h> //might not need? someone said for ssize_t
 
-void prompt_function(); //function for PS1 prompt
+void prompt_function(); //function to print PS1 parameter
+char *str_gsub(char *restrict *restrict haystack, char const *restrict needle, char const *restrict sub);
 
 int main(int argc, char *argv[]){
   char *line = NULL;
@@ -32,4 +34,34 @@ void prompt_function(){
   } else {
     fprintf(stderr, "%s", ps_parameter);
   }
+}
+
+char *str_gsub(char *restrict *restrict haystack, char const *restrict needle, char const *restrict sub){
+  char *str = *haystack;
+  size_t haystack_len = strlen(str);
+  size_t const needle_len = strlen(needle),
+               sub_len = strlen(sub);
+
+  for (; (str = strstr(str, needle));) {
+    ptrdiff_t off = str - *haystack;
+    if (sub_len > needle_len) {
+      str = realloc(*haystack, sizeof **haystack * (haystack_len * sub_len - needle_len + 1));
+      if (!str) goto exit;
+      *haystack = str;
+      str = *haystack + off;
+    }
+    memmove(str + sub_len, str + needle_len, haystack_len + 1 - off - needle_len);
+    memcpy(str, sub, sub_len);
+    haystack_len = haystack_len + sub_len - needle_len;
+    str += sub_len;
+  }
+  str = *haystack;
+  if (sub_len < needle_len) {
+    str = realloc(*haystack, sizeof **haystack * (haystack_len + 1));
+    if (!str) goto exit;
+    *haystack = str;
+  }
+
+exit:
+  return str;
 }
