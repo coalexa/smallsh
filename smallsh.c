@@ -14,16 +14,40 @@ char *str_gsub(char *restrict *restrict haystack, char const *restrict needle, c
 int main(int argc, char *argv[]){
   char *line = NULL;
   size_t n = 0;
+  char **split_arr = NULL;
   for(;;) {
     prompt_function();
+    split_arr = malloc(sizeof *split_arr);
     ssize_t line_length = getline(&line, &n, stdin);
 
-    if(line_length == -1) {
-      exit(1);
-    } else {
-      printf("it works?");
-      exit(0);
+    char *IFS = getenv("IFS");
+    if(IFS == NULL) IFS = " \t\n";
+
+    char *token = NULL;
+    char *dup_token = NULL;
+    size_t count = 0;
+    for(int i = 0; i >= 0; i++) {
+      if(i == 0) {
+        token = strtok(line, IFS);
+      } else {
+        token = strtok(NULL, IFS);
+      }
+      if(token == NULL) break;
+      dup_token = strdup(token);
+
+      count++;
+      split_arr = realloc(split_arr, sizeof (*split_arr) * count);
+      split_arr[i] = dup_token;
     }
+    for(int i = 0; i < count; i++) {
+      printf("%s \n", split_arr[i]);
+    }
+    for(int i = 0; i < count; i++) {
+      free(split_arr[i]);
+    }
+    free(split_arr);
+    free(line);
+    exit(0);
   }
 }
 
