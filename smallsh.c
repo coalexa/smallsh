@@ -47,9 +47,12 @@ int main(int argc, char *argv[]){
     }
     dd = malloc(8);
     sprintf(dd, "%d", getpid());
-    printf("%s \n", dd);
+    //printf("%s \n", dd);
+    printf("%d \n", getpid());
 
     for (size_t i = 0; i < count; i++) {
+      split_arr[i] = str_gsub(&split_arr[i], "~", getenv("HOME"));
+      split_arr[i] = str_gsub(&split_arr[i], "$$", dd);
       printf("%s \n", split_arr[i]);
     }
 
@@ -93,6 +96,8 @@ char *str_gsub(char *restrict *restrict haystack, char const *restrict needle, c
     memcpy(str, sub, sub_len);
     haystack_len = haystack_len + sub_len - needle_len;
     str += sub_len;
+
+    if (!strncmp(needle, "~", 1) || !strcmp(needle, "~")) break;
   }
   str = *haystack;
   if (sub_len < needle_len) {
