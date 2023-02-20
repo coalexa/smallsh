@@ -6,54 +6,69 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <unistd.h>
 #include <sys/types.h> //might not need? someone said for ssize_t
 
 void prompt_function(); //function to print PS1 parameter
 char *str_gsub(char *restrict *restrict haystack, char const *restrict needle, char const *restrict sub);
 
+char *tilda = NULL; //pointer for ~/
+char *dd = NULL;   //pointer for $$
+char *dq = NULL;   //pointer for $?
+char *de = NULL;   //pointer for $!
+
 int main(int argc, char *argv[]){
   char *line = NULL;
   size_t n = 0;
   char **split_arr = NULL;
-  for(;;) {
+  for (;;) {
     prompt_function();
     split_arr = malloc(sizeof *split_arr);
     ssize_t line_length = getline(&line, &n, stdin);
 
     char *IFS = getenv("IFS");
-    if(IFS == NULL) IFS = " \t\n";
+    if (IFS == NULL) IFS = " \t\n";
 
     char *token = NULL;
     char *dup_token = NULL;
     size_t count = 0;
-    for(int i = 0; i >= 0; i++) {
-      if(i == 0) {
+    for (size_t i = 0; i >= 0; i++) {
+      if (i == 0) {
         token = strtok(line, IFS);
       } else {
         token = strtok(NULL, IFS);
       }
-      if(token == NULL) break;
+      if (token == NULL) break;
       dup_token = strdup(token);
 
       count++;
-      split_arr = realloc(split_arr, sizeof (*split_arr) * count);
+      split_arr = realloc(split_arr, sizeof *split_arr * count + 1);
       split_arr[i] = dup_token;
     }
-    for(int i = 0; i < count; i++) {
+    dd = malloc(8);
+    sprintf(dd, "%d", getpid());
+    printf("%s \n", dd);
+
+    for (size_t i = 0; i < count; i++) {
       printf("%s \n", split_arr[i]);
     }
-    for(int i = 0; i < count; i++) {
+
+    free(dd);
+    //things declared in loops go in/out of scope on each iteration, we should free/realloc on each loop
+    for (int i = 0; i < count; i++) {
       free(split_arr[i]);
     }
     free(split_arr);
+    //maybe free this outside of main for loop
     free(line);
+
     exit(0);
   }
 }
 
 void prompt_function(){
   char *ps_parameter = getenv("PS1");
-  if(ps_parameter == NULL) {
+  if (ps_parameter == NULL) {
     fprintf(stderr, "");
   } else {
     fprintf(stderr, "%s", ps_parameter);
