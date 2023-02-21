@@ -7,12 +7,14 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <unistd.h>
+#include <sys/wait.h>
 #include <sys/types.h>
 
 // TODO: possibly move getenv functions outside of loops into their own function?
 
 void prompt_function(); //function to print PS1 parameter
 char *str_gsub(char *restrict *restrict haystack, char const *restrict needle, char const *restrict sub);
+void exec_nbc(char **split_arr); //probably change name here, add more parameters for files/signals
 
 char *smallsh_pid = NULL;   //pointer for $$
 char *fg_exit = NULL;   //pointer for $?
@@ -25,8 +27,7 @@ int main(){
   for (;;) {
     prompt_function();
     split_arr = malloc(sizeof *split_arr);
-    ssize_t line_length = getline(&line, &n, stdin);
-    printf("%ld \n", line_length);
+    getline(&line, &n, stdin);
 
     // SPLITTING START
     char *IFS = getenv("IFS");
@@ -70,8 +71,9 @@ int main(){
     }
     // EXPANSION END
 
+    // {TODO: Add exit built-in command}
     // BUILT-INS START
-    if (!split_arr[0]) continue;
+    if (!split_arr[0]) continue; //will likely need to change continue to a jump to free stuff
     
     if (strcmp(split_arr[0], "cd") == 0) {
       if (split_arr[2]) {
@@ -92,13 +94,15 @@ int main(){
     }
     // BUILT-INS END
 
+    exec_nbc(split_arr);
+
     free(smallsh_pid);   //can likely be moved outside the for loop
     //things declared in loops go in/out of scope on each iteration, we should free/realloc on each loop
     for (int i = 0; i < count; i++) {
       free(split_arr[i]);
     }
     free(split_arr);
-    //maybe free this outside of main for loop
+    //maybe free this outside of main for loop (nvm someone said this caused them issues)
     free(line);
 
     exit(0);
@@ -146,4 +150,31 @@ char *str_gsub(char *restrict *restrict haystack, char const *restrict needle, c
 
 exit:
   return str;
+}
+
+void exec_nbc(char **split_arr) {
+   int childStatus;
+
+   pid_t spawnPid = fork();
+
+   switch(spawnPid){
+     case -1:
+       perror("fork()\n");
+       exit(1);
+       break;
+     case 0:
+       // child process
+       fprintf(stderr, "CHILD(%d) running %s command\n", getpid(), split_arr[0]);
+       execvp(split_arr[0], split_arr);
+       // exec only returns if there is an error
+       perror("execvp");
+       exit(2);
+       break;
+     default:
+       // in parent process
+       // wait for child's termination
+       spawnPid = waitpid(spawnPid, &childStatus, 0);
+       fprintf(stderr, "PARENT(%d): child(%d) terminated. Exiting\n", getpid(), spawnPid);
+       break;
+   }
 }
