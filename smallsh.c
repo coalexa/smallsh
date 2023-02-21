@@ -13,6 +13,7 @@
 // TODO: possibly move getenv functions outside of loops into their own function?
 
 void prompt_function(); //function to print PS1 parameter
+int split_str(char **split_arr, char *line);
 char *str_gsub(char *restrict *restrict haystack, char const *restrict needle, char const *restrict sub);
 void exec_nbc(char **split_arr); //probably change name here, add more parameters for files/signals
 
@@ -24,40 +25,19 @@ int main(){
   char *line = NULL;
   size_t n = 0;
   char **split_arr = NULL;
+
+  // convert PID to string for $$ expansion
+  smallsh_pid = malloc(8);
+  sprintf(smallsh_pid, "%d", getpid());
+
   for (;;) {
     prompt_function();
     split_arr = malloc(sizeof *split_arr);
     getline(&line, &n, stdin);
 
-    // SPLITTING START
-    char *IFS = getenv("IFS");
-    if (IFS == NULL) IFS = " \t\n";
-
-    char *token = NULL;
-    char *dup_token = NULL;
-    size_t count = 0;
-    for (size_t i = 0; i >= 0; i++) {
-      if (i == 0) {
-        token = strtok(line, IFS);
-      } else {
-        token = strtok(NULL, IFS);
-      }
-      if (token == NULL) break;
-      dup_token = strdup(token);
-
-      count++;
-      split_arr = realloc(split_arr, sizeof *split_arr * count + 1);
-      split_arr[i] = dup_token;
-    }
-    // SPLITTING END
+    size_t count = split_str(split_arr, line);
 
     // EXPANSION START
-    // these can likely be moved to the top outside the for loop
-    smallsh_pid = malloc(8);
-    sprintf(smallsh_pid, "%d", getpid());
-    //printf("%s \n", dd);
-    //printf("%d \n", getpid());
-
     for (size_t i = 0; i < count; i++) {
       if (!strncmp(split_arr[i], "~/", 2)) {
         char *home_param = getenv("HOME");
@@ -97,12 +77,11 @@ int main(){
     exec_nbc(split_arr);
 
     free(smallsh_pid);   //can likely be moved outside the for loop
-    //things declared in loops go in/out of scope on each iteration, we should free/realloc on each loop
+    // probably keep these 3 things to be freed inside main loop
     for (int i = 0; i < count; i++) {
       free(split_arr[i]);
     }
     free(split_arr);
-    //maybe free this outside of main for loop (nvm someone said this caused them issues)
     free(line);
 
     exit(0);
@@ -117,6 +96,30 @@ void prompt_function(){
   } else {
     fprintf(stderr, "%s", ps_param);
   }
+}
+
+// function for splitting line into separate words
+int split_str(char **split_arr, char *line) {
+    char *IFS = getenv("IFS");
+    if (IFS == NULL) IFS = " \t\n";
+
+    char *token = NULL;
+    char *dup_token = NULL;
+    size_t count = 0;
+    for (size_t i = 0; i >= 0; i++) {
+      if (i == 0) {
+        token = strtok(line, IFS);
+      } else {
+        token = strtok(NULL, IFS);
+      }
+      if (token == NULL) break;
+      dup_token = strdup(token);
+
+      count++;
+      split_arr = realloc(split_arr, sizeof *split_arr * count + 1);
+      split_arr[i] = dup_token;
+    }
+    return count;
 }
 
 // function for expansion
