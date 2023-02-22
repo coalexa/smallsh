@@ -13,13 +13,14 @@
 // TODO: possibly move getenv functions outside of loops into their own function?
 
 void prompt_function(); //function to print PS1 parameter
-int split_str(char **split_arr, char *line);
+//size_t split_str(char **split_arr, char *line);
 char *str_gsub(char *restrict *restrict haystack, char const *restrict needle, char const *restrict sub);
-void exec_nbc(char **split_arr); //probably change name here, add more parameters for files/signals
+//void parse_arr(char ***split_arr, size_t count, char **outfile, char **infile, int *background);
+void exec_cmd(char **split_arr); //probably change name here, add more parameters for files/signals
 
 char *smallsh_pid = NULL;   //pointer for $$
-char *fg_exit = NULL;   //pointer for $?
-char *bg_pid = NULL;   //pointer for $!
+char *fg_exit = "0";   //pointer for $?
+char *bg_pid = "";   //pointer for $!
 
 int main(){
   char *line = NULL;
@@ -35,11 +36,34 @@ int main(){
     split_arr = malloc(sizeof *split_arr);
     getline(&line, &n, stdin);
 
-    size_t count = split_str(split_arr, line);
+    // SPLITTING START
+    char *token = NULL;
+    char *dup_token = NULL;
+    size_t count = 0;
+
+    for (size_t i = 0; i >= 0; i++) {
+      char *IFS = getenv("IFS");
+      if (IFS == NULL) IFS = " \t\n";
+
+      if (i == 0) {
+        token = strtok(line, IFS);
+      } else {
+        token = strtok(NULL, IFS);
+      }
+      if (token == NULL) break;
+      dup_token = strdup(token);
+
+      count++;
+      split_arr = realloc(split_arr, sizeof *split_arr * count + 1);
+      split_arr[i] = dup_token;
+    }
+    // SPLITTING END
+    //size_t count = split_str(&split_arr, line);
+    //printf("%s", split_arr[0]);
 
     // EXPANSION START
     for (size_t i = 0; i < count; i++) {
-      if (!strncmp(split_arr[i], "~/", 2)) {
+      if (strncmp(split_arr[i], "~/", 2) == 0) {
         char *home_param = getenv("HOME");
         if (home_param == NULL) home_param = "";
         split_arr[i] = str_gsub(&split_arr[i], "~", home_param);
@@ -50,6 +74,110 @@ int main(){
       printf("%s \n", split_arr[i]);
     }
     // EXPANSION END
+
+    // PARSING START
+    int background = 0;
+    char *outfile = NULL;
+    char *infile = NULL;
+    if (count < 3) continue;
+
+    // case for when there are comments
+    for(size_t i = 0; i < count; i++) {
+      if (strcmp(split_arr[i], "#") == 0) {
+        free(split_arr[i]);
+        split_arr[i] = NULL;
+        
+        if ((i - 1) > 0 && (strcmp(split_arr[i - 1], "&") == 0)) {
+          background = 1;
+          free(split_arr[i - 1]);
+          split_arr[i - 1] = NULL;
+        }
+
+        if ((i - 3) > 0) {
+          if (strcmp(split_arr[i - 3], "<") == 0) {
+            infile = split_arr[i - 2];
+            outfile = split_arr[i - 4];
+            free(split_arr[i - 3]);
+            split_arr[i - 3] = NULL;
+
+            if ((i - 5) > 0 && (strcmp(split_arr[i - 5], ">") == 0)) {
+              free(split_arr[i - 5]);
+              split_arr[i - 5] = NULL;
+            }
+
+          } else if (strcmp(split_arr[i - 3], ">") == 0) {
+            outfile = split_arr[i - 2];
+            infile = split_arr[i - 4];
+            free(split_arr[i - 3]);
+            split_arr[i - 3] = NULL;
+
+            if ((i - 5) > 0 && (strcmp(split_arr[i - 5], "<") == 0)) {
+            free(split_arr[i - 5]);
+              split_arr[i - 5] = NULL;
+            }
+          }
+        }
+      }
+    }
+    // case where process should be run in background
+    if (strcmp(split_arr[count - 1], "&") == 0) {
+      background = 1;
+      free(split_arr[count - 1]);
+      split_arr[count - 1] = NULL;
+
+      if ((count - 3) > 0) {
+        if (strcmp(split_arr[count - 3], "<") == 0) {
+          infile = split_arr[count - 2];
+          outfile = split_arr[count - 4];
+          free(split_arr[count - 3]);
+          split_arr[count - 3] = NULL;
+
+          if ((count - 5) > 0 && (strcmp(split_arr[count - 5], ">") == 0)) {
+            free(split_arr[count - 5]);
+            split_arr[count - 5] = NULL;
+          }
+
+        } else if (strcmp(split_arr[count - 3], ">") == 0) {
+          outfile = split_arr[count - 2];
+          infile = split_arr[count - 4];
+          free(split_arr[count - 3]);
+          split_arr[count - 3] = NULL;
+
+          if ((count - 5) > 0 && (strcmp(split_arr[count - 5], "<") == 0)) {
+            free(split_arr[count - 5]);
+            split_arr[count - 5] = NULL;
+          }
+        }
+      }
+    }
+
+    // case where there is no & and #
+    if (strcmp(split_arr[count - 2], "<") == 0) {
+      infile = split_arr[count - 1];
+      outfile = split_arr[count - 3];
+      free(split_arr[count - 2]);
+      split_arr[count - 2] = NULL;
+      
+      if ((count - 4) > 0 && (strcmp(split_arr[count - 4], ">") == 0)) {
+        free(split_arr[count - 4]);
+        split_arr[count - 4] = NULL;
+      }
+
+    } else if (strcmp(split_arr[count - 2], ">") == 0) {
+      outfile = split_arr[count - 1];
+      infile = split_arr[count - 3];
+      free(split_arr[count - 2]);
+      split_arr[count - 2] = NULL;
+
+      if ((count - 4) > 0 && (strcmp(split_arr[count - 4], "<") == 0)) {
+        free(split_arr[count - 4]);
+        split_arr[count - 4] = NULL;
+      }
+    }
+    printf("%s\n", outfile);
+    printf("%s\n", infile);
+    printf("%d\n", background);
+    // PARSING END
 
     // {TODO: Add exit built-in command}
     // BUILT-INS START
@@ -74,7 +202,7 @@ int main(){
     }
     // BUILT-INS END
 
-    exec_nbc(split_arr);
+    exec_cmd(split_arr);
 
     free(smallsh_pid);   //can likely be moved outside the for loop
     // probably keep these 3 things to be freed inside main loop
@@ -98,8 +226,9 @@ void prompt_function(){
   }
 }
 
+/*
 // function for splitting line into separate words
-int split_str(char **split_arr, char *line) {
+size_t split_str(char **split_arr, char *line) {
     char *IFS = getenv("IFS");
     if (IFS == NULL) IFS = " \t\n";
 
@@ -121,6 +250,7 @@ int split_str(char **split_arr, char *line) {
     }
     return count;
 }
+*/
 
 // function for expansion
 char *str_gsub(char *restrict *restrict haystack, char const *restrict needle, char const *restrict sub){
@@ -155,7 +285,82 @@ exit:
   return str;
 }
 
-void exec_nbc(char **split_arr) {
+/*
+// function for parsing
+void parse_arr(char ***split_arr, size_t count, char **outfile, char **infile, int *background) {
+  if (count < 3) return;
+
+  // case for when there are comments
+  for(size_t i = 0; i < count; i++) {
+    if (strcmp(split_arr[i], "#") == 0) {
+      free(split_arr[i]);
+      split_arr[i] = NULL;
+      
+      if ((i - 1) > 0 && (strcmp(split_arr[i - 1], "&") == 0)) {
+        *background = 1;
+        free(split_arr[i - 1]);
+        split_arr[i - 1] = NULL;
+      }
+
+      if ((i - 3) > 0) {
+        if (strcmp(split_arr[i - 3], "<") == 0) {
+          infile = split_arr[i - 2];
+          outfile = split_arr[i - 4];
+          free(split_arr[i - 3]);
+          split_arr[i - 3] = NULL;
+
+          if ((i - 5) > 0 && (strcmp(split_arr[i - 5], ">") == 0)) {
+            free(split_arr[i - 5]);
+            split_arr[i - 5] = NULL;
+          }
+
+        } else if (strcmp(split_arr[i - 3], ">") == 0) {
+          outfile = split_arr[i - 2];
+          infile = split_arr[i - 4];
+          free(split_arr[i - 3]);
+          split_arr[i - 3] = NULL;
+
+          if ((i - 5) > 0 && (strcmp(split_arr[i - 5], "<") == 0)) {
+           free(split_arr[i - 5]);
+            split_arr[i - 5] = NULL;
+          }
+        }
+      }
+    }
+  }
+  // case where process should be run in background
+  if (strcmp(split_arr[count - 1], "&") == 0) {
+    *background = 1;
+    free(split_arr[count - 1]);
+    split_arr[count - 1] = NULL;
+  }
+
+  // case where there is no & and #
+  if (strcmp(split_arr[count - 2], "<") == 0) {
+    infile = split_arr[count - 1];
+    outfile = split_arr[count - 3];
+    free(split_arr[count - 2]);
+    split_arr[count - 2] = NULL;
+    
+    if ((count - 4) > 0 && (strcmp(split_arr[count - 4], ">") == 0)) {
+      free(split_arr[count - 4]);
+      split_arr[count - 4] = NULL;
+    }
+
+  } else if (strcmp(split_arr[count - 2], ">") == 0) {
+    outfile = split_arr[count - 1];
+    infile = split_arr[count - 3];
+    free(split_arr[count - 2]);
+    split_arr[count - 2] = NULL;
+
+    if ((count - 4) > 0 && (strcmp(split_arr[count - 4], "<") == 0)) {
+      free(split_arr[count - 4]);
+      split_arr[count - 4] = NULL;
+    }
+  }
+}
+*/
+void exec_cmd(char **split_arr) {
    int childStatus;
 
    pid_t spawnPid = fork();
