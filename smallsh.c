@@ -79,7 +79,7 @@ int main(){
     int background = 0;
     char *outfile = NULL;
     char *infile = NULL;
-    if (count < 3) continue;
+    if (count < 3) continue;  // change to jump to free stuff instead of continue
 
     // case for when there are comments
     for(size_t i = 0; i < count; i++) {
@@ -91,35 +91,58 @@ int main(){
           background = 1;
           free(split_arr[i - 1]);
           split_arr[i - 1] = NULL;
+        
+          // case when there's a # and & is last word
+          if ((i - 3) > 0) {
+            if (strcmp(split_arr[i - 3], "<") == 0) {
+              infile = split_arr[i - 2];
+              outfile = split_arr[i - 4];
+              free(split_arr[i - 3]);
+              split_arr[i - 3] = NULL;
+
+              if ((i - 5) > 0 && (strcmp(split_arr[i - 5], ">") == 0)) {
+                free(split_arr[i - 5]);
+                split_arr[i - 5] = NULL;
+              }
+
+            } else if (strcmp(split_arr[i - 3], ">") == 0) {
+              outfile = split_arr[i - 2];
+              infile = split_arr[i - 4];
+              free(split_arr[i - 3]);
+              split_arr[i - 3] = NULL;
+
+              if ((i - 5) > 0 && (strcmp(split_arr[i - 5], "<") == 0)) {
+                free(split_arr[i - 5]);
+                split_arr[i - 5] = NULL;
+              }
+            }
+          }
         }
+        // case when there's a # and & is not the last word
+        if ((i - 2) > 0 && (strcmp(split_arr[i - 2], "<") == 0)) {
+          infile = split_arr[i - 1];
+          outfile = split_arr[i - 3];
+          free(split_arr[i - 2]);
+          split_arr[i - 2] = NULL;
 
-        if ((i - 3) > 0) {
-          if (strcmp(split_arr[i - 3], "<") == 0) {
-            infile = split_arr[i - 2];
-            outfile = split_arr[i - 4];
-            free(split_arr[i - 3]);
-            split_arr[i - 3] = NULL;
+          if ((i - 4) > 0 && (strcmp(split_arr[i - 4], ">") == 0)) {
+            free(split_arr[i - 4]);
+            split_arr[i - 4] = NULL;
+          }
+        } else if ((i - 2) > 0 && (strcmp(split_arr[i - 2], ">") == 0)) {
+          outfile = split_arr[i - 1];
+          infile = split_arr[i - 3];
+          free(split_arr[i - 2]);
+          split_arr[i - 2] = NULL;
 
-            if ((i - 5) > 0 && (strcmp(split_arr[i - 5], ">") == 0)) {
-              free(split_arr[i - 5]);
-              split_arr[i - 5] = NULL;
-            }
-
-          } else if (strcmp(split_arr[i - 3], ">") == 0) {
-            outfile = split_arr[i - 2];
-            infile = split_arr[i - 4];
-            free(split_arr[i - 3]);
-            split_arr[i - 3] = NULL;
-
-            if ((i - 5) > 0 && (strcmp(split_arr[i - 5], "<") == 0)) {
-            free(split_arr[i - 5]);
-              split_arr[i - 5] = NULL;
-            }
+          if ((i - 4) > 0 && (strcmp(split_arr[i - 4], "<") == 0)) {
+            free(split_arr[i - 4]);
+            split_arr[i - 4] = NULL;
           }
         }
       }
     }
-    // case where process should be run in background
+    // case when & is the last word and no # is present
     if (strcmp(split_arr[count - 1], "&") == 0) {
       background = 1;
       free(split_arr[count - 1]);
@@ -151,7 +174,7 @@ int main(){
       }
     }
 
-    // case where there is no & and #
+    // case when there is no & and #
     if (strcmp(split_arr[count - 2], "<") == 0) {
       infile = split_arr[count - 1];
       outfile = split_arr[count - 3];
