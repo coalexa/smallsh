@@ -35,13 +35,18 @@ int main(){
   for (;;) {
     prompt_function();
     split_arr = malloc(sizeof *split_arr);
-    getline(&line, &n, stdin);
+    ssize_t line_length = getline(&line, &n, stdin);
 
     if (feof(stdin)) {
       fprintf(stderr, "\nexit\n");
       exit(0);
     }
-    // have to clear error otherwise 
+    if (line_length == -1 && errno != 0) {
+      fprintf(stderr, "%c", '\n');
+      clearerr(stdin);
+      errno = 0;
+      continue;
+    }
 
     // SPLITTING START
     char *token = NULL;
@@ -90,7 +95,7 @@ int main(){
     int background = 0;
     char *outfile = NULL;
     char *infile = NULL;
-    if (count < 3) goto exit;  // change to jump to exit instead of continue
+    if (count < 3) goto builtins;  // change to jump to built-ins instead of continue
 
     // case for when there are comments
     for(size_t i = 0; i < count; i++) {
@@ -209,21 +214,21 @@ int main(){
       }
     }
     // PARSING END
-
+builtins:
     // BUILT-INS START
+    if (split_arr[0] == NULL) goto free_stuff; //will likely need to change continue to a jump to free stuff
     // EXIT BUILT-IN
-exit:
+
     if (strcmp(split_arr[0], "exit") == 0) {
       if (split_arr[2]) {
         fprintf(stderr, "Too many arguments\n");
-        goto free_stuff; //idk maybe don't continue?? if continue change to free stuff i guess
+        goto free_stuff;
       }
       if (split_arr[1]) {
-        printf("%s", split_arr[1]);
         for(int i = 0; i < strlen(split_arr[1]); i++) {
           if (isdigit(split_arr[1][i]) == 0) {
             fprintf(stderr, "Argument must be a number\n");
-            goto free_stuff; //again probably change this
+            goto free_stuff;
           }
         }
         fprintf(stderr, "\nexit\n");
@@ -234,17 +239,15 @@ exit:
     }
 
     // CD BUILT-IN
-    if (!split_arr[0]) goto free_stuff; //will likely need to change continue to a jump to free stuff
-    
     if (strcmp(split_arr[0], "cd") == 0) {
       if (split_arr[2]) {
         fprintf(stderr, "Too many arguments\n");
-        goto free_stuff; //CHANGE THIS
+        goto free_stuff;
       } 
       if (split_arr[1]) {
         if (chdir(split_arr[1]) == -1) {
           fprintf(stderr, "Invalid directory\n");
-          goto free_stuff; //CHANGE THIS
+          goto free_stuff;
         } else {
           chdir(split_arr[1]);
         }
@@ -329,8 +332,7 @@ void exec_cmd(char **split_arr, char *infile, char *outfile, int background) {
          close(input_fd);
          input_fd = open(infile, O_RDONLY);
          if (input_fd == -1) {
-           fprintf(stderr, "open() failed on %s\n", infile);
-           perror("Could not open file");
+           fprintf(stderr, "Could not open %s for reading\n", infile);
            exit(errno);
          }
          //maybe include another close here???
@@ -340,8 +342,7 @@ void exec_cmd(char **split_arr, char *infile, char *outfile, int background) {
          close(output_fd);
          output_fd = open(outfile, O_WRONLY | O_CREAT | O_TRUNC, 0777);
          if (output_fd == -1) {
-           fprintf(stderr, "open() failed on %s\n", outfile);
-           perror("Could not open or create file for writing");
+           fprintf(stderr, "Could not open or create %s for writing\n", outfile);
            exit(errno);
          }
          //maybe include another close
