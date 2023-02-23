@@ -7,7 +7,9 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <ctype.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <sys/types.h>
 
@@ -15,7 +17,7 @@
 
 void prompt_function(); //function to print PS1 parameter
 char *str_gsub(char *restrict *restrict haystack, char const *restrict needle, char const *restrict sub);
-void exec_cmd(char **split_arr); //probably change name here, add more parameters for files/signals
+void exec_cmd(char **split_arr, char *infile, char *outfile, int background); //signal parameters???
 
 char *smallsh_pid = NULL;   //pointer for $$
 char *fg_exit = "0";   //pointer for $?
@@ -66,8 +68,6 @@ int main(){
       split_arr[i] = dup_token;
     }
     // SPLITTING END
-    //size_t count = split_str(&split_arr, line);
-    //printf("%s", split_arr[0]);
 
     // EXPANSION START
     for (size_t i = 0; i < count; i++) {
@@ -83,7 +83,6 @@ int main(){
       split_arr[i] = str_gsub(&split_arr[i], "$?", fg_exit);
       //$! expansion
       split_arr[i] = str_gsub(&split_arr[i], "$!", bg_pid);
-      //printf("%s \n", split_arr[i]);
     }
     // EXPANSION END
 
@@ -108,22 +107,22 @@ int main(){
           if ((i - 3) > 0) {
             if (strcmp(split_arr[i - 3], "<") == 0) {
               infile = split_arr[i - 2];
-              outfile = split_arr[i - 4];
               free(split_arr[i - 3]);
               split_arr[i - 3] = NULL;
 
               if ((i - 5) > 0 && (strcmp(split_arr[i - 5], ">") == 0)) {
+                outfile = split_arr[i - 4];
                 free(split_arr[i - 5]);
                 split_arr[i - 5] = NULL;
               }
 
             } else if (strcmp(split_arr[i - 3], ">") == 0) {
               outfile = split_arr[i - 2];
-              infile = split_arr[i - 4];
               free(split_arr[i - 3]);
               split_arr[i - 3] = NULL;
 
               if ((i - 5) > 0 && (strcmp(split_arr[i - 5], "<") == 0)) {
+                infile = split_arr[i - 4];
                 free(split_arr[i - 5]);
                 split_arr[i - 5] = NULL;
               }
@@ -133,21 +132,21 @@ int main(){
         // case when there's a # and & is not the last word
         if ((i - 2) > 0 && (strcmp(split_arr[i - 2], "<") == 0)) {
           infile = split_arr[i - 1];
-          outfile = split_arr[i - 3];
           free(split_arr[i - 2]);
           split_arr[i - 2] = NULL;
 
           if ((i - 4) > 0 && (strcmp(split_arr[i - 4], ">") == 0)) {
+            outfile = split_arr[i - 3];
             free(split_arr[i - 4]);
             split_arr[i - 4] = NULL;
           }
         } else if ((i - 2) > 0 && (strcmp(split_arr[i - 2], ">") == 0)) {
           outfile = split_arr[i - 1];
-          infile = split_arr[i - 3];
           free(split_arr[i - 2]);
           split_arr[i - 2] = NULL;
 
           if ((i - 4) > 0 && (strcmp(split_arr[i - 4], "<") == 0)) {
+            infile = split_arr[i - 3];
             free(split_arr[i - 4]);
             split_arr[i - 4] = NULL;
           }
@@ -163,22 +162,22 @@ int main(){
       if ((count - 3) > 0) {
         if (strcmp(split_arr[count - 3], "<") == 0) {
           infile = split_arr[count - 2];
-          outfile = split_arr[count - 4];
           free(split_arr[count - 3]);
           split_arr[count - 3] = NULL;
 
           if ((count - 5) > 0 && (strcmp(split_arr[count - 5], ">") == 0)) {
+            outfile = split_arr[count - 4];
             free(split_arr[count - 5]);
             split_arr[count - 5] = NULL;
           }
 
         } else if (strcmp(split_arr[count - 3], ">") == 0) {
           outfile = split_arr[count - 2];
-          infile = split_arr[count - 4];
           free(split_arr[count - 3]);
           split_arr[count - 3] = NULL;
 
           if ((count - 5) > 0 && (strcmp(split_arr[count - 5], "<") == 0)) {
+            infile = split_arr[count - 4];
             free(split_arr[count - 5]);
             split_arr[count - 5] = NULL;
           }
@@ -189,32 +188,28 @@ int main(){
     // case when there is no & and #
     if (strcmp(split_arr[count - 2], "<") == 0) {
       infile = split_arr[count - 1];
-      outfile = split_arr[count - 3];
       free(split_arr[count - 2]);
       split_arr[count - 2] = NULL;
       
       if ((count - 4) > 0 && (strcmp(split_arr[count - 4], ">") == 0)) {
+        outfile = split_arr[count - 3];
         free(split_arr[count - 4]);
         split_arr[count - 4] = NULL;
       }
 
     } else if (strcmp(split_arr[count - 2], ">") == 0) {
       outfile = split_arr[count - 1];
-      infile = split_arr[count - 3];
       free(split_arr[count - 2]);
       split_arr[count - 2] = NULL;
 
       if ((count - 4) > 0 && (strcmp(split_arr[count - 4], "<") == 0)) {
+        infile = split_arr[count - 3];
         free(split_arr[count - 4]);
         split_arr[count - 4] = NULL;
       }
     }
-    //printf("%s\n", outfile);
-    //printf("%s\n", infile);
-    //printf("%d\n", background);
     // PARSING END
 
-    // {TODO: Add exit built-in command}
     // BUILT-INS START
     // EXIT BUILT-IN
 exit:
@@ -259,17 +254,15 @@ exit:
     }
     // BUILT-INS END
     else {
-      exec_cmd(split_arr);
+      exec_cmd(split_arr, infile, outfile, background);
     }
 
 free_stuff:
-    //continue;
-    // probably keep these 3 things to be freed inside main loop
+    // probably keep these 2 things to be freed inside main loop
     for (int i = 0; i < count; i++) {
       free(split_arr[i]);
     }
     free(split_arr);
-    //free(line);
   }
   free(line);
   free(smallsh_pid);
@@ -318,29 +311,52 @@ exit:
   return str;
 }
 
-void exec_cmd(char **split_arr) {
-   int childStatus;
+void exec_cmd(char **split_arr, char *infile, char *outfile, int background) {
+   int child_status;
+   int input_fd = 0;  //0 for stdin
+   int output_fd = 1;  //1 for stdout
 
-   pid_t spawnPid = fork();
+   pid_t spawn_pid = fork();
 
-   switch(spawnPid){
+   switch(spawn_pid){
      case -1:
        perror("fork()\n");
        exit(1);
        break;
      case 0:
        // child process
-       //fprintf(stderr, "CHILD(%d) running %s command\n", getpid(), split_arr[0]);
+       if (infile != NULL) {
+         close(input_fd);
+         input_fd = open(infile, O_RDONLY);
+         if (input_fd == -1) {
+           fprintf(stderr, "open() failed on %s\n", infile);
+           perror("Could not open file");
+           exit(errno);
+         }
+         //maybe include another close here???
+       }
+
+       if (outfile != NULL) {
+         close(output_fd);
+         output_fd = open(outfile, O_WRONLY | O_CREAT | O_TRUNC, 0777);
+         if (output_fd == -1) {
+           fprintf(stderr, "open() failed on %s\n", outfile);
+           perror("Could not open or create file for writing");
+           exit(errno);
+         }
+         //maybe include another close
+       }
+       
        execvp(split_arr[0], split_arr);
        // exec only returns if there is an error
+       // add fprintf to stderr with some message idk
        perror("execvp");
-       exit(2);
+       exit(errno);
        break;
      default:
        // in parent process
        // wait for child's termination
-       spawnPid = waitpid(spawnPid, &childStatus, 0);
-       //fprintf(stderr, "PARENT(%d): child(%d) terminated. Exiting\n", getpid(), spawnPid);
+       spawn_pid = waitpid(spawn_pid, &child_status, 0);
        break;
    }
 }
