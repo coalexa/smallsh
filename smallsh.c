@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <unistd.h>
+#include <ctype.h>
 #include <sys/wait.h>
 #include <sys/types.h>
 
@@ -36,6 +37,12 @@ int main(){
     split_arr = malloc(sizeof *split_arr);
     getline(&line, &n, stdin);
 
+    if (feof(stdin)) {
+      fprintf(stderr, "\nexit\n");
+      exit(0);
+    }
+    // have to clear error otherwise 
+
     // SPLITTING START
     char *token = NULL;
     char *dup_token = NULL;
@@ -50,7 +57,10 @@ int main(){
       } else {
         token = strtok(NULL, IFS);
       }
-      if (token == NULL) break;
+      if (token == NULL) {
+        split_arr[i] = NULL;
+        break;
+      }
       dup_token = strdup(token);
 
       count++;
@@ -63,15 +73,19 @@ int main(){
 
     // EXPANSION START
     for (size_t i = 0; i < count; i++) {
+      // ~ expansion
       if (strncmp(split_arr[i], "~/", 2) == 0) {
         char *home_param = getenv("HOME");
         if (home_param == NULL) home_param = "";
         split_arr[i] = str_gsub(&split_arr[i], "~", home_param);
       }
+      // $$ expansion
       split_arr[i] = str_gsub(&split_arr[i], "$$", smallsh_pid);
       //$? expansion
+      split_arr[i] = str_gsub(&split_arr[i], "$?", fg_exit);
       //$! expansion
-      printf("%s \n", split_arr[i]);
+      split_arr[i] = str_gsub(&split_arr[i], "$!", bg_pid);
+      //printf("%s \n", split_arr[i]);
     }
     // EXPANSION END
 
@@ -79,7 +93,7 @@ int main(){
     int background = 0;
     char *outfile = NULL;
     char *infile = NULL;
-    if (count < 3) continue;  // change to jump to free stuff instead of continue
+    if (count < 3) goto exit;  // change to jump to exit instead of continue
 
     // case for when there are comments
     for(size_t i = 0; i < count; i++) {
@@ -197,46 +211,70 @@ int main(){
         split_arr[count - 4] = NULL;
       }
     }
-    printf("%s\n", outfile);
-    printf("%s\n", infile);
-    printf("%d\n", background);
+    //printf("%s\n", outfile);
+    //printf("%s\n", infile);
+    //printf("%d\n", background);
     // PARSING END
 
     // {TODO: Add exit built-in command}
     // BUILT-INS START
-    if (!split_arr[0]) continue; //will likely need to change continue to a jump to free stuff
+    // EXIT BUILT-IN
+exit:
+    if (strcmp(split_arr[0], "exit") == 0) {
+      if (split_arr[2]) {
+        fprintf(stderr, "Too many arguments\n");
+        goto free_stuff; //idk maybe don't continue?? if continue change to free stuff i guess
+      }
+      if (split_arr[1]) {
+        printf("%s", split_arr[1]);
+        for(int i = 0; i < strlen(split_arr[1]); i++) {
+          if (isdigit(split_arr[1][i]) == 0) {
+            fprintf(stderr, "Argument must be a number\n");
+            goto free_stuff; //again probably change this
+          }
+        }
+        fprintf(stderr, "\nexit\n");
+        exit(atoi(split_arr[1]));
+      }
+      fprintf(stderr, "\nexit\n");
+      exit(atoi(fg_exit));
+    }
+
+    // CD BUILT-IN
+    if (!split_arr[0]) goto free_stuff; //will likely need to change continue to a jump to free stuff
     
     if (strcmp(split_arr[0], "cd") == 0) {
       if (split_arr[2]) {
-        fprintf(stderr, "Too many arguments \n");
-        continue; //CHANGE THIS
-      } if (split_arr[1]) {
+        fprintf(stderr, "Too many arguments\n");
+        goto free_stuff; //CHANGE THIS
+      } 
+      if (split_arr[1]) {
         if (chdir(split_arr[1]) == -1) {
-          fprintf(stderr, "Invalid directory \n");
-          continue; //CHANGE THIS
+          fprintf(stderr, "Invalid directory\n");
+          goto free_stuff; //CHANGE THIS
         } else {
           chdir(split_arr[1]);
-          continue; //This can get removed after removing exit at the bottom of for loop
         }
       } else {
         chdir(getenv("HOME"));
-        continue; //This can get removed after removing exit at the bottom of for loop
       }
     }
     // BUILT-INS END
+    else {
+      exec_cmd(split_arr);
+    }
 
-    exec_cmd(split_arr);
-
-    free(smallsh_pid);   //can likely be moved outside the for loop
+free_stuff:
+    //continue;
     // probably keep these 3 things to be freed inside main loop
     for (int i = 0; i < count; i++) {
       free(split_arr[i]);
     }
     free(split_arr);
-    free(line);
-
-    exit(0);
+    //free(line);
   }
+  free(line);
+  free(smallsh_pid);
 }
 
 // function for PS1 prompt
@@ -395,7 +433,7 @@ void exec_cmd(char **split_arr) {
        break;
      case 0:
        // child process
-       fprintf(stderr, "CHILD(%d) running %s command\n", getpid(), split_arr[0]);
+       //fprintf(stderr, "CHILD(%d) running %s command\n", getpid(), split_arr[0]);
        execvp(split_arr[0], split_arr);
        // exec only returns if there is an error
        perror("execvp");
@@ -405,7 +443,7 @@ void exec_cmd(char **split_arr) {
        // in parent process
        // wait for child's termination
        spawnPid = waitpid(spawnPid, &childStatus, 0);
-       fprintf(stderr, "PARENT(%d): child(%d) terminated. Exiting\n", getpid(), spawnPid);
+       //fprintf(stderr, "PARENT(%d): child(%d) terminated. Exiting\n", getpid(), spawnPid);
        break;
    }
 }
