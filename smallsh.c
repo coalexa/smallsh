@@ -23,6 +23,8 @@ char *smallsh_pid = NULL;   //pointer for $$
 char *fg_exit = "0";   //pointer for $?
 char *bg_pid = "";   //pointer for $!
 
+int comment_found = 0;
+
 int main(){
   char *line = NULL;
   size_t n = 0;
@@ -33,6 +35,8 @@ int main(){
   sprintf(smallsh_pid, "%d", getpid());
 
   for (;;) {
+    if (errno != 0) errno = 0;
+
     prompt_function();
     split_arr = malloc(sizeof *split_arr);
     ssize_t line_length = getline(&line, &n, stdin);
@@ -51,7 +55,7 @@ int main(){
     // SPLITTING START
     char *token = NULL;
     char *dup_token = NULL;
-    size_t count = 0;
+    int count = 0;
 
     for (size_t i = 0; i >= 0; i++) {
       char *IFS = getenv("IFS");
@@ -75,7 +79,7 @@ int main(){
     // SPLITTING END
 
     // EXPANSION START
-    for (size_t i = 0; i < count; i++) {
+    for (int i = 0; i < count; i++) {
       // ~ expansion
       if (strncmp(split_arr[i], "~/", 2) == 0) {
         char *home_param = getenv("HOME");
@@ -99,7 +103,8 @@ int main(){
 
     // case for when there are comments
     for(size_t i = 0; i < count; i++) {
-      if (strcmp(split_arr[i], "#") == 0) {
+      if ((strcmp(split_arr[i], "#") == 0) || (strncmp(split_arr[i], "#", 1) == 0)) {
+        comment_found = 1;
         free(split_arr[i]);
         split_arr[i] = NULL;
         
@@ -156,10 +161,12 @@ int main(){
             split_arr[i - 4] = NULL;
           }
         }
+        break; // exit out of for loop after completing parsing
       }
     }
+    
     // case when & is the last word and no # is present
-    if (strcmp(split_arr[count - 1], "&") == 0) {
+    if (comment_found == 0 && strcmp(split_arr[count - 1], "&") == 0) {
       background = 1;
       free(split_arr[count - 1]);
       split_arr[count - 1] = NULL;
@@ -189,31 +196,34 @@ int main(){
         }
       }
     }
-
+    
     // case when there is no & and #
-    if (strcmp(split_arr[count - 2], "<") == 0) {
-      infile = split_arr[count - 1];
-      free(split_arr[count - 2]);
-      split_arr[count - 2] = NULL;
-      
-      if ((count - 4) > 0 && (strcmp(split_arr[count - 4], ">") == 0)) {
-        outfile = split_arr[count - 3];
-        free(split_arr[count - 4]);
-        split_arr[count - 4] = NULL;
-      }
+    if (comment_found == 0 && background == 0) {
+      if (strcmp(split_arr[count - 2], "<") == 0) {
+        infile = split_arr[count - 1];
+        free(split_arr[count - 2]);
+        split_arr[count - 2] = NULL;
+        
+        if ((count - 4) > 0 && (strcmp(split_arr[count - 4], ">") == 0)) {
+          outfile = split_arr[count - 3];
+          free(split_arr[count - 4]);
+          split_arr[count - 4] = NULL;
+        }
 
-    } else if (strcmp(split_arr[count - 2], ">") == 0) {
-      outfile = split_arr[count - 1];
-      free(split_arr[count - 2]);
-      split_arr[count - 2] = NULL;
+      } else if (strcmp(split_arr[count - 2], ">") == 0) {
+        outfile = split_arr[count - 1];
+        free(split_arr[count - 2]);
+        split_arr[count - 2] = NULL;
 
-      if ((count - 4) > 0 && (strcmp(split_arr[count - 4], "<") == 0)) {
-        infile = split_arr[count - 3];
-        free(split_arr[count - 4]);
-        split_arr[count - 4] = NULL;
+        if ((count - 4) > 0 && (strcmp(split_arr[count - 4], "<") == 0)) {
+          infile = split_arr[count - 3];
+          free(split_arr[count - 4]);
+          split_arr[count - 4] = NULL;
+        }
       }
     }
     // PARSING END
+    
 builtins:
     // BUILT-INS START
     if (split_arr[0] == NULL) goto free_stuff; //will likely need to change continue to a jump to free stuff
@@ -350,13 +360,17 @@ void exec_cmd(char **split_arr, char *infile, char *outfile, int background) {
        
        execvp(split_arr[0], split_arr);
        // exec only returns if there is an error
-       // add fprintf to stderr with some message idk
-       perror("execvp");
+       perror("execvp()");
        exit(errno);
        break;
      default:
        // in parent process
        // wait for child's termination
+       if (background == 1) {
+         waitpid(spawn_pid, &child_status, WUNTRACED | WNOHANG);
+         bg_pid = malloc(8);
+         sprintf(bg_pid, "%d", spawn_pid);
+       }
        spawn_pid = waitpid(spawn_pid, &child_status, 0);
        break;
    }
