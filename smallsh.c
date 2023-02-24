@@ -39,7 +39,7 @@ int main(){
     int child_status;
     while ((bg_child = waitpid(0, &child_status, WUNTRACED | WNOHANG)) > 0) {
       if (WIFEXITED(child_status)) {
-        fprintf(stderr, "Child process %jd done. Exit status %d.\n", (intmax_t) bg_child, child_status);
+        fprintf(stderr, "Child process %jd done. Exit status %d.\n", (intmax_t) bg_child, WEXITSTATUS(child_status));
       }
       else if (WIFSIGNALED(child_status)) {
         fprintf(stderr, "Child process %jd done. Signaled %d.\n", (intmax_t) bg_child, WTERMSIG(child_status));
@@ -375,7 +375,7 @@ void exec_cmd(char **split_arr, char *infile, char *outfile, int background) {
        
        execvp(split_arr[0], split_arr);
        // exec only returns if there is an error
-       perror("execvp()");
+       fprintf(stderr, "Could not execute command %s", split_arr[0]);
        exit(errno);
        break;
      default:
@@ -388,6 +388,20 @@ void exec_cmd(char **split_arr, char *infile, char *outfile, int background) {
        }
        else {
          spawn_pid = waitpid(spawn_pid, &child_status, 0);
+         if (WIFSIGNALED(child_status)) {
+           int num_sig = 128 + WTERMSIG(child_status);
+           fprintf(stderr, "%d", num_sig);
+           fg_exit = malloc(8);
+           sprintf(fg_exit, "%d", num_sig);
+         } else {
+           fg_exit = malloc(8);
+           sprintf(fg_exit, "%d", WEXITSTATUS(child_status));
+         }
+         if (WIFSTOPPED(child_status)) {
+           waitpid(spawn_pid, &child_status, WUNTRACED | WNOHANG);
+           bg_pid = malloc(8);
+           sprintf(bg_pid, "%d", spawn_pid);
+         }
        }
        break;
    }
