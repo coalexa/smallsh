@@ -23,8 +23,6 @@ char *smallsh_pid = NULL;   //pointer for $$
 char *fg_exit = "0";   //pointer for $?
 char *bg_pid = "";   //pointer for $!
 
-int comment_found = 0;
-
 int main(){
   char *line = NULL;
   size_t n = 0;
@@ -36,6 +34,21 @@ int main(){
 
   for (;;) {
     if (errno != 0) errno = 0;
+
+    pid_t bg_child;
+    int child_status;
+    while ((bg_child = waitpid(0, &child_status, WUNTRACED | WNOHANG)) > 0) {
+      if (WIFEXITED(child_status)) {
+        fprintf(stderr, "Child process %jd done. Exit status %d.\n", (intmax_t) bg_child, child_status);
+      }
+      else if (WIFSIGNALED(child_status)) {
+        fprintf(stderr, "Child process %jd done. Signaled %d.\n", (intmax_t) bg_child, WTERMSIG(child_status));
+      }
+      else if (WIFSTOPPED(child_status)) {
+        kill(bg_child, SIGCONT);
+        fprintf(stderr, "Child process %jd stopped. Continuing.\n", (intmax_t) bg_child);
+      }
+    }
 
     prompt_function();
     split_arr = malloc(sizeof *split_arr);
@@ -55,7 +68,7 @@ int main(){
     // SPLITTING START
     char *token = NULL;
     char *dup_token = NULL;
-    int count = 0;
+    size_t count = 0;
 
     for (size_t i = 0; i >= 0; i++) {
       char *IFS = getenv("IFS");
@@ -79,7 +92,7 @@ int main(){
     // SPLITTING END
 
     // EXPANSION START
-    for (int i = 0; i < count; i++) {
+    for (size_t i = 0; i < count; i++) {
       // ~ expansion
       if (strncmp(split_arr[i], "~/", 2) == 0) {
         char *home_param = getenv("HOME");
@@ -97,6 +110,7 @@ int main(){
 
     // PARSING START
     int background = 0;
+    int comment_found = 0;
     char *outfile = NULL;
     char *infile = NULL;
     if (count < 3) goto builtins;  // change to jump to built-ins instead of continue
@@ -286,6 +300,7 @@ void prompt_function(){
   char *ps_param = getenv("PS1");
   if (ps_param == NULL) {
     fprintf(stderr, "");
+
   } else {
     fprintf(stderr, "%s", ps_param);
   }
@@ -371,7 +386,9 @@ void exec_cmd(char **split_arr, char *infile, char *outfile, int background) {
          bg_pid = malloc(8);
          sprintf(bg_pid, "%d", spawn_pid);
        }
-       spawn_pid = waitpid(spawn_pid, &child_status, 0);
+       else {
+         spawn_pid = waitpid(spawn_pid, &child_status, 0);
+       }
        break;
    }
 }
