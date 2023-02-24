@@ -110,15 +110,13 @@ int main(){
 
     // PARSING START
     int background = 0;
-    int comment_found = 0;
     char *outfile = NULL;
     char *infile = NULL;
-    if (count < 3) goto builtins;  // change to jump to built-ins instead of continue
+    if (count < 3) goto built_ins;
 
-    // case for when there are comments
     for(size_t i = 0; i < count; i++) {
+      // start by checking for comments
       if ((strcmp(split_arr[i], "#") == 0) || (strncmp(split_arr[i], "#", 1) == 0)) {
-        comment_found = 1;
         free(split_arr[i]);
         split_arr[i] = NULL;
         
@@ -139,8 +137,8 @@ int main(){
                 free(split_arr[i - 5]);
                 split_arr[i - 5] = NULL;
               }
-
-            } else if (strcmp(split_arr[i - 3], ">") == 0) {
+            } 
+            else if (strcmp(split_arr[i - 3], ">") == 0) {
               outfile = split_arr[i - 2];
               free(split_arr[i - 3]);
               split_arr[i - 3] = NULL;
@@ -164,7 +162,8 @@ int main(){
             free(split_arr[i - 4]);
             split_arr[i - 4] = NULL;
           }
-        } else if ((i - 2) > 0 && (strcmp(split_arr[i - 2], ">") == 0)) {
+        } 
+        else if ((i - 2) > 0 && (strcmp(split_arr[i - 2], ">") == 0)) {
           outfile = split_arr[i - 1];
           free(split_arr[i - 2]);
           split_arr[i - 2] = NULL;
@@ -175,72 +174,72 @@ int main(){
             split_arr[i - 4] = NULL;
           }
         }
-        break; // exit out of for loop after completing parsing
+        break; // exit out of for loop after parsing if # was found
       }
-    }
-    
-    // case when & is the last word and no # is present
-    if (comment_found == 0 && strcmp(split_arr[count - 1], "&") == 0) {
-      background = 1;
-      free(split_arr[count - 1]);
-      split_arr[count - 1] = NULL;
+      // cases where no # was found
+      else if (i == count - 1) {
+        // case when & is the last word
+        if (strcmp(split_arr[i], "&") == 0) {
+          background = 1;
+          free(split_arr[i]);
+          split_arr[i] = NULL;
 
-      if ((count - 3) > 0) {
-        if (strcmp(split_arr[count - 3], "<") == 0) {
-          infile = split_arr[count - 2];
-          free(split_arr[count - 3]);
-          split_arr[count - 3] = NULL;
+          if ((i - 2) > 0) {
+            if (strcmp(split_arr[i - 2], "<") == 0) {
+              infile = split_arr[i - 1];
+              free(split_arr[i - 2]);
+              split_arr[i - 2] = NULL;
 
-          if ((count - 5) > 0 && (strcmp(split_arr[count - 5], ">") == 0)) {
-            outfile = split_arr[count - 4];
-            free(split_arr[count - 5]);
-            split_arr[count - 5] = NULL;
-          }
+              if ((i - 4) > 0 && (strcmp(split_arr[i - 4], ">") == 0)) {
+                outfile = split_arr[i - 3];
+                free(split_arr[i - 4]);
+                split_arr[i - 4] = NULL;
+              }
+            } 
+            else if (strcmp(split_arr[i - 2], ">") == 0) {
+              outfile = split_arr[i - 1];
+              free(split_arr[i - 2]);
+              split_arr[i - 2] = NULL;
 
-        } else if (strcmp(split_arr[count - 3], ">") == 0) {
-          outfile = split_arr[count - 2];
-          free(split_arr[count - 3]);
-          split_arr[count - 3] = NULL;
-
-          if ((count - 5) > 0 && (strcmp(split_arr[count - 5], "<") == 0)) {
-            infile = split_arr[count - 4];
-            free(split_arr[count - 5]);
-            split_arr[count - 5] = NULL;
+              if ((i - 4) > 0 && (strcmp(split_arr[i - 4], "<") == 0)) {
+                infile = split_arr[i - 3];
+                free(split_arr[i - 4]);
+                split_arr[i - 4] = NULL;
+              }
+            }
           }
         }
-      }
-    }
-    
-    // case when there is no & and #
-    if (comment_found == 0 && background == 0) {
-      if (strcmp(split_arr[count - 2], "<") == 0) {
-        infile = split_arr[count - 1];
-        free(split_arr[count - 2]);
-        split_arr[count - 2] = NULL;
-        
-        if ((count - 4) > 0 && (strcmp(split_arr[count - 4], ">") == 0)) {
-          outfile = split_arr[count - 3];
-          free(split_arr[count - 4]);
-          split_arr[count - 4] = NULL;
-        }
+        // case when there is no # and &
+        else if (strcmp(split_arr[i - 1], "<") == 0) {
+          infile = split_arr[i];
+          free(split_arr[i - 1]);
+          split_arr[i - 1] = NULL;
+          
+          if ((i - 3) > 0 && (strcmp(split_arr[i - 3], ">") == 0)) {
+            outfile = split_arr[i - 2];
+            free(split_arr[i - 3]);
+            split_arr[i - 3] = NULL;
+          }
 
-      } else if (strcmp(split_arr[count - 2], ">") == 0) {
-        outfile = split_arr[count - 1];
-        free(split_arr[count - 2]);
-        split_arr[count - 2] = NULL;
+        } 
+        else if (strcmp(split_arr[i - 1], ">") == 0) {
+          outfile = split_arr[i];
+          free(split_arr[i - 1]);
+          split_arr[i - 1] = NULL;
 
-        if ((count - 4) > 0 && (strcmp(split_arr[count - 4], "<") == 0)) {
-          infile = split_arr[count - 3];
-          free(split_arr[count - 4]);
-          split_arr[count - 4] = NULL;
+          if ((i - 3) > 0 && (strcmp(split_arr[i - 3], "<") == 0)) {
+            infile = split_arr[i - 2];
+            free(split_arr[i - 3]);
+            split_arr[i - 3] = NULL;
+          }
         }
       }
     }
     // PARSING END
-    
-builtins:
+
+built_ins:
     // BUILT-INS START
-    if (split_arr[0] == NULL) goto free_stuff; //will likely need to change continue to a jump to free stuff
+    if (split_arr[0] == NULL) goto free_stuff;
     // EXIT BUILT-IN
 
     if (strcmp(split_arr[0], "exit") == 0) {
@@ -285,7 +284,6 @@ builtins:
     }
 
 free_stuff:
-    // probably keep these 2 things to be freed inside main loop
     for (int i = 0; i < count; i++) {
       free(split_arr[i]);
     }
@@ -293,6 +291,8 @@ free_stuff:
   }
   free(line);
   free(smallsh_pid);
+  free(fg_exit);
+  free(bg_pid);
 }
 
 // function for PS1 prompt
@@ -300,13 +300,12 @@ void prompt_function(){
   char *ps_param = getenv("PS1");
   if (ps_param == NULL) {
     fprintf(stderr, "");
-
   } else {
     fprintf(stderr, "%s", ps_param);
   }
 }
 
-// function for expansion
+// function for expansion AKA search and replace
 char *str_gsub(char *restrict *restrict haystack, char const *restrict needle, char const *restrict sub){
   char *str = *haystack;
   size_t haystack_len = strlen(str);
@@ -339,6 +338,7 @@ exit:
   return str;
 }
 
+// function for executing non-built-in commands
 void exec_cmd(char **split_arr, char *infile, char *outfile, int background) {
    int child_status;
    int input_fd = 0;  //0 for stdin
@@ -360,7 +360,6 @@ void exec_cmd(char **split_arr, char *infile, char *outfile, int background) {
            fprintf(stderr, "Could not open %s for reading\n", infile);
            exit(errno);
          }
-         //maybe include another close here???
        }
 
        if (outfile != NULL) {
@@ -370,9 +369,8 @@ void exec_cmd(char **split_arr, char *infile, char *outfile, int background) {
            fprintf(stderr, "Could not open or create %s for writing\n", outfile);
            exit(errno);
          }
-         //maybe include another close
        }
-       
+  
        execvp(split_arr[0], split_arr);
        // exec only returns if there is an error
        fprintf(stderr, "Could not execute command %s", split_arr[0]);
@@ -380,12 +378,13 @@ void exec_cmd(char **split_arr, char *infile, char *outfile, int background) {
        break;
      default:
        // in parent process
-       // wait for child's termination
+       // check for background processes first
        if (background == 1) {
          waitpid(spawn_pid, &child_status, WUNTRACED | WNOHANG);
          bg_pid = malloc(8);
          sprintf(bg_pid, "%d", spawn_pid);
        }
+       // otherwise go to foreground process code
        else {
          spawn_pid = waitpid(spawn_pid, &child_status, 0);
          if (WIFSIGNALED(child_status)) {
@@ -393,7 +392,8 @@ void exec_cmd(char **split_arr, char *infile, char *outfile, int background) {
            fprintf(stderr, "%d", num_sig);
            fg_exit = malloc(8);
            sprintf(fg_exit, "%d", num_sig);
-         } else {
+         } 
+         else {
            fg_exit = malloc(8);
            sprintf(fg_exit, "%d", WEXITSTATUS(child_status));
          }
