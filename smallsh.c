@@ -17,7 +17,8 @@
 
 void prompt_function(); //function to print PS1 parameter
 char *str_gsub(char *restrict *restrict haystack, char const *restrict needle, char const *restrict sub);
-void exec_cmd(char **split_arr, char *infile, char *outfile, int background); //signal parameters???
+void exec_cmd(char **split_arr, char *infile, char *outfile, int background, struct sigaction *SIGINT_old, struct sigaction *SIGTSTP_old);
+void dummy_handler(int signo);
 
 char *smallsh_pid = NULL;   //pointer for $$
 char *fg_exit = "0";   //pointer for $?
@@ -33,6 +34,12 @@ int main(){
   sprintf(smallsh_pid, "%d", getpid());
 
   for (;;) {
+    struct sigaction SIGTSTP_action = {0}, SIGINT_action = {0}, SIGINT_dummy = {0}, SIGTSTP_old = {0}, SIGINT_old = {0};
+    SIGTSTP_action.sa_handler = SIG_IGN;
+    sigaction(SIGTSTP, &SIGTSTP_action, &SIGTSTP_old);
+    SIGINT_action.sa_handler = SIG_IGN;
+    sigaction(SIGINT, &SIGINT_action, &SIGINT_old);
+
     if (errno != 0) errno = 0;
 
     pid_t bg_child;
@@ -49,10 +56,15 @@ int main(){
         fprintf(stderr, "Child process %jd stopped. Continuing.\n", (intmax_t) bg_child);
       }
     }
-
+    
     prompt_function();
     split_arr = malloc(sizeof *split_arr);
+    SIGINT_dummy.sa_handler = dummy_handler;
+    sigfillset(&SIGINT_dummy.sa_mask);
+    SIGINT_dummy.sa_flags = 0;
+    sigaction(SIGINT, &SIGINT_dummy, &SIGINT_action);
     ssize_t line_length = getline(&line, &n, stdin);
+    sigaction(SIGINT, &SIGINT_action, &SIGINT_old);
 
     if (feof(stdin)) {
       fprintf(stderr, "\nexit\n");
@@ -70,7 +82,7 @@ int main(){
     char *dup_token = NULL;
     size_t count = 0;
 
-    for (size_t i = 0; i >= 0; i++) {
+    for (size_t i = 0;; i++) {
       char *IFS = getenv("IFS");
       if (IFS == NULL) IFS = " \t\n";
 
@@ -238,26 +250,28 @@ int main(){
     // PARSING END
 
 built_ins:
-    // BUILT-INS START
-    if (split_arr[0] == NULL) goto free_stuff;
-    // EXIT BUILT-IN
+    // BUILT-INS START 
+    if (split_arr[0] == NULL) goto free_stuff;  // no command present
 
+    // EXIT BUILT-IN
     if (strcmp(split_arr[0], "exit") == 0) {
       if (split_arr[2]) {
         fprintf(stderr, "Too many arguments\n");
         goto free_stuff;
       }
       if (split_arr[1]) {
-        for(int i = 0; i < strlen(split_arr[1]); i++) {
+        for(size_t i = 0; i < strlen(split_arr[1]); i++) {
           if (isdigit(split_arr[1][i]) == 0) {
             fprintf(stderr, "Argument must be a number\n");
             goto free_stuff;
           }
         }
         fprintf(stderr, "\nexit\n");
+        kill(0, SIGINT);
         exit(atoi(split_arr[1]));
       }
       fprintf(stderr, "\nexit\n");
+      kill(0, SIGINT);
       exit(atoi(fg_exit));
     }
 
@@ -280,11 +294,11 @@ built_ins:
     }
     // BUILT-INS END
     else {
-      exec_cmd(split_arr, infile, outfile, background);
+      exec_cmd(split_arr, infile, outfile, background, &SIGINT_old, &SIGTSTP_old);
     }
 
 free_stuff:
-    for (int i = 0; i < count; i++) {
+    for (size_t i = 0; i < count; i++) {
       free(split_arr[i]);
     }
     free(split_arr);
@@ -299,7 +313,8 @@ free_stuff:
 void prompt_function(){
   char *ps_param = getenv("PS1");
   if (ps_param == NULL) {
-    fprintf(stderr, "");
+    ps_param = "";
+    fprintf(stderr, "%s", ps_param);
   } else {
     fprintf(stderr, "%s", ps_param);
   }
@@ -339,7 +354,7 @@ exit:
 }
 
 // function for executing non-built-in commands
-void exec_cmd(char **split_arr, char *infile, char *outfile, int background) {
+void exec_cmd(char **split_arr, char *infile, char *outfile, int background, struct sigaction *SIGINT_old, struct sigaction *SIGTSTP_old) {
    int child_status;
    int input_fd = 0;  //0 for stdin
    int output_fd = 1;  //1 for stdout
@@ -353,6 +368,9 @@ void exec_cmd(char **split_arr, char *infile, char *outfile, int background) {
        break;
      case 0:
        // child process
+       sigaction(SIGINT, SIGINT_old, NULL);
+       sigaction(SIGTSTP, SIGTSTP_old, NULL);
+
        if (infile != NULL) {
          close(input_fd);
          input_fd = open(infile, O_RDONLY);
@@ -386,7 +404,7 @@ void exec_cmd(char **split_arr, char *infile, char *outfile, int background) {
        }
        // otherwise go to foreground process code
        else {
-         spawn_pid = waitpid(spawn_pid, &child_status, 0);
+         waitpid(spawn_pid, &child_status, 0);
          if (WIFSIGNALED(child_status)) {
            int num_sig = 128 + WTERMSIG(child_status);
            fprintf(stderr, "%d", num_sig);
@@ -398,6 +416,8 @@ void exec_cmd(char **split_arr, char *infile, char *outfile, int background) {
            sprintf(fg_exit, "%d", WEXITSTATUS(child_status));
          }
          if (WIFSTOPPED(child_status)) {
+           kill(spawn_pid, SIGCONT);
+           fprintf(stderr, "Child process %jd stopped. Continuing.\n", (intmax_t) spawn_pid);
            waitpid(spawn_pid, &child_status, WUNTRACED | WNOHANG);
            bg_pid = malloc(8);
            sprintf(bg_pid, "%d", spawn_pid);
@@ -405,4 +425,8 @@ void exec_cmd(char **split_arr, char *infile, char *outfile, int background) {
        }
        break;
    }
+}
+
+void dummy_handler(int signo) {
+
 }
