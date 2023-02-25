@@ -13,7 +13,6 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 
-// TODO: possibly move getenv functions outside of loops into their own function?
 
 void prompt_function(); //function to print PS1 parameter
 char *str_gsub(char *restrict *restrict haystack, char const *restrict needle, char const *restrict sub);
@@ -34,6 +33,7 @@ int main(){
   sprintf(smallsh_pid, "%d", getpid());
 
   for (;;) {
+    // setup signal handling for SIGINT and SIGTSTP
     struct sigaction SIGTSTP_action = {0}, SIGINT_action = {0}, SIGINT_dummy = {0}, SIGTSTP_old = {0}, SIGINT_old = {0};
     SIGTSTP_action.sa_handler = SIG_IGN;
     sigaction(SIGTSTP, &SIGTSTP_action, &SIGTSTP_old);
@@ -59,11 +59,14 @@ int main(){
     
     prompt_function();
     split_arr = malloc(sizeof *split_arr);
+
     SIGINT_dummy.sa_handler = dummy_handler;
     sigfillset(&SIGINT_dummy.sa_mask);
     SIGINT_dummy.sa_flags = 0;
     sigaction(SIGINT, &SIGINT_dummy, &SIGINT_action);
+
     ssize_t line_length = getline(&line, &n, stdin);
+
     sigaction(SIGINT, &SIGINT_action, &SIGINT_old);
 
     if (feof(stdin)) {
@@ -188,7 +191,7 @@ int main(){
         }
         break; // exit out of for loop after parsing if # was found
       }
-      // cases where no # was found
+      // cases when there is no #
       else if (i == count - 1) {
         // case when & is the last word
         if (strcmp(split_arr[i], "&") == 0) {
@@ -250,20 +253,20 @@ int main(){
     // PARSING END
 
 built_ins:
-    // BUILT-INS START 
-    if (split_arr[0] == NULL) goto free_stuff;  // no command present
+    // BUILT-INS START
+    if (split_arr[0] == NULL) goto free_array;  // no command present
 
     // EXIT BUILT-IN
     if (strcmp(split_arr[0], "exit") == 0) {
       if (split_arr[2]) {
         fprintf(stderr, "Too many arguments\n");
-        goto free_stuff;
+        goto free_array;
       }
       if (split_arr[1]) {
         for(size_t i = 0; i < strlen(split_arr[1]); i++) {
           if (isdigit(split_arr[1][i]) == 0) {
             fprintf(stderr, "Argument must be a number\n");
-            goto free_stuff;
+            goto free_array;
           }
         }
         fprintf(stderr, "\nexit\n");
@@ -279,12 +282,12 @@ built_ins:
     if (strcmp(split_arr[0], "cd") == 0) {
       if (split_arr[2]) {
         fprintf(stderr, "Too many arguments\n");
-        goto free_stuff;
+        goto free_array;
       } 
       if (split_arr[1]) {
         if (chdir(split_arr[1]) == -1) {
           fprintf(stderr, "Invalid directory\n");
-          goto free_stuff;
+          goto free_array;
         } else {
           chdir(split_arr[1]);
         }
@@ -297,7 +300,7 @@ built_ins:
       exec_cmd(split_arr, infile, outfile, background, &SIGINT_old, &SIGTSTP_old);
     }
 
-free_stuff:
+free_array:
     for (size_t i = 0; i < count; i++) {
       free(split_arr[i]);
     }
@@ -368,6 +371,7 @@ void exec_cmd(char **split_arr, char *infile, char *outfile, int background, str
        break;
      case 0:
        // child process
+       // reset SIGINT and SIGTSTP to default behavior
        sigaction(SIGINT, SIGINT_old, NULL);
        sigaction(SIGTSTP, SIGTSTP_old, NULL);
 
@@ -402,7 +406,7 @@ void exec_cmd(char **split_arr, char *infile, char *outfile, int background, str
          bg_pid = malloc(8);
          sprintf(bg_pid, "%d", spawn_pid);
        }
-       // otherwise go to foreground process code
+       // otherwise process is a foreground process
        else {
          waitpid(spawn_pid, &child_status, 0);
          if (WIFSIGNALED(child_status)) {
