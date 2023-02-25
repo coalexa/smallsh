@@ -48,10 +48,10 @@ int main(){
       if (WIFEXITED(child_status)) {
         fprintf(stderr, "Child process %jd done. Exit status %d.\n", (intmax_t) bg_child, WEXITSTATUS(child_status));
       }
-      else if (WIFSIGNALED(child_status)) {
+      if (WIFSIGNALED(child_status)) {
         fprintf(stderr, "Child process %jd done. Signaled %d.\n", (intmax_t) bg_child, WTERMSIG(child_status));
       }
-      else if (WIFSTOPPED(child_status)) {
+      if (WIFSTOPPED(child_status)) {
         kill(bg_child, SIGCONT);
         fprintf(stderr, "Child process %jd stopped. Continuing.\n", (intmax_t) bg_child);
       }
@@ -73,7 +73,7 @@ int main(){
       fprintf(stderr, "\nexit\n");
       exit(0);
     }
-    if (line_length == -1 && errno != 0) {
+    if (line_length == -1) {
       fprintf(stderr, "%c", '\n');
       clearerr(stdin);
       errno = 0;
@@ -409,16 +409,16 @@ void exec_cmd(char **split_arr, char *infile, char *outfile, int background, str
        // otherwise process is a foreground process
        else {
          waitpid(spawn_pid, &child_status, 0);
+         if (WIFEXITED(child_status)) {
+           fg_exit = malloc(8);
+           sprintf(fg_exit, "%d", WEXITSTATUS(child_status));
+         }
          if (WIFSIGNALED(child_status)) {
            int num_sig = 128 + WTERMSIG(child_status);
            fprintf(stderr, "%d", num_sig);
            fg_exit = malloc(8);
            sprintf(fg_exit, "%d", num_sig);
          } 
-         else {
-           fg_exit = malloc(8);
-           sprintf(fg_exit, "%d", WEXITSTATUS(child_status));
-         }
          if (WIFSTOPPED(child_status)) {
            kill(spawn_pid, SIGCONT);
            fprintf(stderr, "Child process %jd stopped. Continuing.\n", (intmax_t) spawn_pid);
