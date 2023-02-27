@@ -16,7 +16,7 @@
 
 void prompt_function(); //function to print PS1 parameter
 char *str_gsub(char *restrict *restrict haystack, char const *restrict needle, char const *restrict sub);
-void exec_cmd(char **split_arr, char *infile, char *outfile, int background, struct sigaction *SIGINT_old, struct sigaction *SIGTSTP_old);
+void exec_cmd(char **split_arr, char *infile, char *outfile, int background, struct sigaction *default_action);
 void dummy_handler(int signo);
 
 char *smallsh_pid = NULL;   //pointer for $$
@@ -34,14 +34,14 @@ int main(){
 
   for (;;) {
     // setup signal handling for SIGINT and SIGTSTP
-    struct sigaction SIGTSTP_action = {0}, SIGINT_action = {0}, SIGINT_dummy = {0}, SIGTSTP_old = {0}, SIGINT_old = {0};
-    SIGTSTP_action.sa_handler = SIG_IGN;
-    sigaction(SIGTSTP, &SIGTSTP_action, &SIGTSTP_old);
-    SIGINT_action.sa_handler = SIG_IGN;
-    sigaction(SIGINT, &SIGINT_action, &SIGINT_old);
+    struct sigaction ignore_action = {0}, SIGINT_dummy = {0}, default_action = {0};
+    ignore_action.sa_handler = SIG_IGN;
+    sigaction(SIGTSTP, &ignore_action, NULL);
+    sigaction(SIGINT, &ignore_action, NULL);
 
     if (errno != 0) errno = 0;
 
+    // checking for any un-waited-for background processes in the same process group ID
     pid_t bg_child;
     int child_status;
     while ((bg_child = waitpid(0, &child_status, WUNTRACED | WNOHANG)) > 0) {
@@ -60,15 +60,19 @@ int main(){
     prompt_function();
     split_arr = malloc(sizeof *split_arr);
 
+    // set SIGINT to dummy so system call gets interrupted and prompt can be reprinted
     SIGINT_dummy.sa_handler = dummy_handler;
     sigfillset(&SIGINT_dummy.sa_mask);
     SIGINT_dummy.sa_flags = 0;
-    sigaction(SIGINT, &SIGINT_dummy, &SIGINT_action);
+    sigaction(SIGINT, &SIGINT_dummy, &ignore_action);
 
+    // get input
     ssize_t line_length = getline(&line, &n, stdin);
 
-    sigaction(SIGINT, &SIGINT_action, &SIGINT_old);
+    // set SIGINT back to SIG_IGN
+    sigaction(SIGINT, &ignore_action, NULL);
 
+    // checking for EOF and getline error
     if (feof(stdin)) {
       fprintf(stderr, "\nexit\n");
       exit(0);
@@ -191,7 +195,7 @@ int main(){
         }
         break; // exit out of for loop after parsing if # was found
       }
-      // cases when there is no #
+      // cases when there is no # and last word is in array is found
       else if (i == count - 1) {
         // case when & is the last word
         if (strcmp(split_arr[i], "&") == 0) {
@@ -297,7 +301,7 @@ built_ins:
     }
     // BUILT-INS END
     else {
-      exec_cmd(split_arr, infile, outfile, background, &SIGINT_old, &SIGTSTP_old);
+      exec_cmd(split_arr, infile, outfile, background, &default_action);
     }
 
 free_array:
@@ -323,6 +327,7 @@ void prompt_function(){
   }
 }
 
+// function from course materials
 // function for expansion AKA search and replace
 char *str_gsub(char *restrict *restrict haystack, char const *restrict needle, char const *restrict sub){
   char *str = *haystack;
@@ -357,7 +362,7 @@ exit:
 }
 
 // function for executing non-built-in commands
-void exec_cmd(char **split_arr, char *infile, char *outfile, int background, struct sigaction *SIGINT_old, struct sigaction *SIGTSTP_old) {
+void exec_cmd(char **split_arr, char *infile, char *outfile, int background, struct sigaction *default_action) {
    int child_status;
    int input_fd = 0;  //0 for stdin
    int output_fd = 1;  //1 for stdout
@@ -366,14 +371,14 @@ void exec_cmd(char **split_arr, char *infile, char *outfile, int background, str
 
    switch(spawn_pid){
      case -1:
-       perror("fork()\n");
+       fprintf(stderr, "Could not fork()\n");
        exit(1);
        break;
      case 0:
        // child process
        // reset SIGINT and SIGTSTP to default behavior
-       sigaction(SIGINT, SIGINT_old, NULL);
-       sigaction(SIGTSTP, SIGTSTP_old, NULL);
+       sigaction(SIGINT, default_action, NULL);
+       sigaction(SIGTSTP, default_action, NULL);
 
        if (infile != NULL) {
          close(input_fd);
@@ -395,7 +400,7 @@ void exec_cmd(char **split_arr, char *infile, char *outfile, int background, str
   
        execvp(split_arr[0], split_arr);
        // exec only returns if there is an error
-       fprintf(stderr, "Could not execute command %s", split_arr[0]);
+       fprintf(stderr, "Could not execute command %s\n", split_arr[0]);
        exit(errno);
        break;
      default:
