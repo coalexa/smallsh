@@ -195,7 +195,7 @@ int main(){
         }
         break; // exit out of for loop after parsing if # was found
       }
-      // cases when there is no # and last word is in array is found
+      // cases when there is no # and last word in array is found
       else if (i == count - 1) {
         // case when & is the last word
         if (strcmp(split_arr[i], "&") == 0) {
@@ -436,6 +436,7 @@ void exec_cmd(char **split_arr, char *infile, char *outfile, int background, str
    }
 }
 
+// dummy handler for SIGINT signal handling
 void dummy_handler(int signo) {
 
 }
