@@ -420,7 +420,6 @@ void exec_cmd(char **split_arr, char *infile, char *outfile, int background, str
          }
          if (WIFSIGNALED(child_status)) {
            int num_sig = 128 + WTERMSIG(child_status);
-           fprintf(stderr, "%d", num_sig);
            fg_exit = malloc(8);
            sprintf(fg_exit, "%d", num_sig);
          } 
