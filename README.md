@@ -4,15 +4,15 @@
 
 This program does the following:
 - Prints an interactive input prompt
-- Prases command line input into semantic tokens
-- Implements parament expansion
+- Parses command line input into semantic tokens
+- Implements parameter expansion
   - Shell special parameters `$$`, `$?`, and `$!`
   - Tilde (~) expansion
-- Implement two shell built-in commands: `exit` and `cd`
-- Execute non-built-in commands using the appropriate `EXEC(3)` function
-   - Implement redirection operators '<' and '>'
-   - Implement the '&' operator to run commands in the background
-- Implement custom behavior for `SIGINT` and `SIGSTP` signals
+- Implements two shell built-in commands: `exit` and `cd`
+- Executes non-built-in commands using the appropriate `EXEC(3)` function
+   - Implements redirection operators '<' and '>'
+   - Implements the '&' operator to run commands in the background
+- Implements custom behavior for `SIGINT` and `SIGSTP` signals
 
 ## How to Run
 Use the included makefile then type `make` to compile
